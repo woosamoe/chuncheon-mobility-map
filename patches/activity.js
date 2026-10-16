@@ -96,52 +96,146 @@
         .addTo(marketLayer);
     });
   }
-  // These are independently verified tourist-site locations, not facility footprints.
-  var sites={'소양강스카이워크':[37.89327743,127.7236633],'구곡폭포':[37.7939338,127.6092987]};
+  // Tourist locations reference the attraction, NOT the ticket-collection point.
+  // Tourism counts are observed 2017-2021 Chuncheon Urban Corporation records.
+  // References: Chuncheon Urban Corporation tourism list, Chuncheon tourism portal,
+  // Samaksan peak from Korea Forest/Trail POI, Cheongpyeongsa temple position.
+  var sites={
+    '소양강스카이워크':{point:[37.89327743,127.7236633],note:'관광지 위치'},
+    '구곡폭포':{point:[37.7939338,127.6092987],note:'관광지 위치'},
+    '삼악산':{point:[37.824932,127.660057],note:'삼악산 산악 지점 참고좌표 · 입장객 계측지점과 다를 수 있음'},
+    '청평사':{point:[37.98639,127.80861],note:'청평사 사찰 위치 · 입장객 집계 위치와 다를 수 있음'}
+  };
+  var tourismPane=state.map.getPane('tourismMarkers')||state.map.createPane('tourismMarkers');
+  tourismPane.style.zIndex='680';
+  tourismPane.style.pointerEvents='auto';
+  var tourismPins=new Map();
+  var cardlist=el('facilityActivityList');
+  cardlist.classList.add('tourism-list');
+  var showButton=document.createElement('button');
+  showButton.type='button';
+  showButton.className='activity-tour-zoom';
+  showButton.id='tourismActivityFocus';
+  showButton.textContent='관광지 마커 지도에서 보기';
+  el('facilityActivityStatus').insertAdjacentElement('afterend',showButton);
+  var touristCSS=document.createElement('style');
+  touristCSS.textContent=[
+    '.activity-tour-zoom{display:block;width:100%;border:1px solid #8864bb;background:#f5f1fb;',
+    'color:#56328f;border-radius:8px;padding:10px 9px;margin:8px 0 10px;',
+    'font-size:12px;font-weight:700;cursor:pointer;text-align:center}',
+    '.activity-tour-zoom:hover{background:#eadff8}',
+    '.tourism-list{max-height:240px;overflow-y:auto}',
+    '.tourism-list button{display:flex;justify-content:space-between;align-items:center;',
+    'gap:8px;width:100%;border:1px solid #eadff6;background:#fbf8ff;border-radius:8px;',
+    'color:#4c3280;padding:10px 8px;font-size:12px;text-align:left;cursor:pointer}',
+    '.tourism-list button:hover{background:#eee5fa}',
+    '.tourism-list .tour-place{font-weight:750}',
+    '.tourism-list .tour-num{font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap}',
+    '.tourism-list .tour-period{display:block;color:#756b80;font-size:10px;margin-top:3px}',
+    '.tour-marker-root{background:transparent;border:none}',
+    '.tour-marker{display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);',
+    'white-space:nowrap;filter:drop-shadow(0px 2px 3px #0005);pointer-events:auto}',
+    '.tour-marker-label{font-weight:750;font-size:12px;color:white;background:#7045ac;',
+    'border-radius:6px 6px 3px 3px;padding:5px 8px;border:2px solid white}',
+    '.tour-marker-tip{width:0;height:0;border-left:9px solid transparent;',
+    'border-right:9px solid transparent;border-top:11px solid #7045ac}',
+    '.tourism-empty{font-size:12px;color:#777;line-height:1.5;padding:8px}'
+  ].join('\n');
+  document.head.append(touristCSS);
+
+  function focusTour(name){
+    var loc=sites[name];
+    if(!loc)return;
+    if(!el('facilityActivityToggle').checked){
+      el('facilityActivityToggle').checked=true;
+      drawTour();
+    }
+    state.map.setView(loc.point,14,{animate:true});
+    var marker=tourismPins.get(name);
+    if(marker){
+      marker.openPopup();
+      marker.setZIndexOffset(2500);
+    }
+  }
   function drawTour(){
     tourLayer.clearLayers();
-    var selection=el('facilityActivityYear').value;
-    var isLatest=selection==='latest';
-    var rowsForPeriod=isLatest?a.facility:a.facility.filter(p=>String(p.year)===selection);
-    var grouped=new Map();
-    rowsForPeriod.forEach(p=>{
-      var key=isLatest?p.name+'|'+p.year:p.name;
-      grouped.set(key,(grouped.get(key)||0)+Number(p.visitors||0));
-    });
-    var shown=[];
-    if(isLatest){
-      var latestByName=new Map();
-      a.facility.forEach(p=>{
-        var old=latestByName.get(p.name);
-        if(!old||p.year>old.year)latestByName.set(p.name,{name:p.name,year:p.year});
-      });
-      latestByName.forEach(row=>shown.push({
-        name:row.name,year:row.year,people:grouped.get(row.name+'|'+row.year)||0
-      }));
-    }else{
-      grouped.forEach((people,name)=>shown.push({name,year:Number(selection),people}));
+    tourismPins.clear();
+    var selection=el('facilityActivityYear').value||'latest';
+    var latest=selection==='latest';
+    var visibleSites=[];
+    for(var name of Object.keys(sites)){
+      var candidates=a.facility.filter(p=>p.name===name&&Number.isFinite(Number(p.visitors)));
+      if(!candidates.length)continue;
+      var year=latest?Math.max(...candidates.map(p=>Number(p.year))):Number(selection);
+      if(!Number.isFinite(year))continue;
+      var yearRows=candidates.filter(p=>Number(p.year)===year);
+      if(!yearRows.length)continue;
+      var total=yearRows.reduce((sum,p)=>sum+Number(p.visitors||0),0);
+      visibleSites.push({name:name,year:year,visitors:total});
     }
-    shown.sort((x,y)=>y.people-x.people);
-    var landmarkCount=Object.keys(sites).filter(name=>shown.some(p=>p.name===name)).length;
-    el('facilityActivityStatus').textContent=shown.length?
-      (isLatest?'시설별 최근 조사연도':selection+'년')+
-      ' · 시설 '+shown.length+'곳, 관광지 위치확인 '+landmarkCount+'곳'+
-      ' · 일반시설 포함 · 춘천 전체 관광객 수 아님':
-      '선택 기간의 시설입장 자료 없음'+(a.metadata.facility?.error?' · '+a.metadata.facility.error:'');
-    if(!el('facilityActivityToggle').checked){el('facilityActivityList').replaceChildren();return;}
-    rows('facilityActivityList',shown.map(p=>[p.name+' ('+p.year+')',p.people]),'명');
-    shown.filter(p=>Object.prototype.hasOwnProperty.call(sites,p.name)).forEach(p=>{
-      L.circleMarker(sites[p.name],{radius:Math.min(19,Math.max(7,6+Math.sqrt(Math.max(0,p.people))/50)),
-        weight:2,color:'#fff',fillColor:'#8864bb',fillOpacity:.9})
-        .bindTooltip(p.name+' · '+p.year+'년 '+fmt(p.people)+'명')
-        .on('click',()=>details('관광시설 입장객',p.name,fmt(p.people)+' 명',
-          p.year+'년 해당 시설의 월별 공개 입장객 합계.'+
-          '\n최근 조사연도는 관광시설마다 다를 수 있습니다.'+
-          '\n춘천 전체 관광객 수를 나타내지 않습니다.'+
-          '\n출처: 춘천도시공사 시설 입장객 정보.'))
-        .addTo(tourLayer);
-    });
+    visibleSites.sort((x,y)=>y.visitors-x.visitors);
+    el('facilityActivityStatus').textContent=visibleSites.length?
+      (latest?'시설별 최근 관측연도':selection+'년')+' · 관광지 '+visibleSites.length+
+      '곳(실제 시설 입장객 자료) · 마지막 공개 연도 2021년':
+      '선택한 기간에 관광지 입장객 자료가 없습니다. 2021년 또는 시설별 최근 기록을 선택해 주세요.';
+    var enabled=el('facilityActivityToggle').checked;
+    showButton.disabled=!visibleSites.length;
+    showButton.textContent='관광지 '+visibleSites.length+'곳 지도에서 보기 ↗';
+    cardlist.replaceChildren();
+    if(!enabled){
+      showButton.textContent='관광지 마커 켜고 지도에서 보기 ↗';
+      return;
+    }
+    for(var p of visibleSites){
+      var loc=sites[p.name];
+      var text=p.name+' '+p.year+'년 '+fmt(p.visitors)+'명';
+      // Tourist pins are separately labeled, in the top overlay pane, so traffic
+      // and commercial circle markers cannot obscure them.
+      var icon=L.divIcon({className:'tour-marker-root',
+        iconSize:[0,0],iconAnchor:[0,0],
+        html:'<div class="tour-marker"><span class="tour-marker-label">'+p.name+
+          '</span><span class="tour-marker-tip"></span></div>'});
+      var pin=L.marker(loc.point,{icon:icon,pane:'tourismMarkers',interactive:true,
+        title:text,keyboard:true,zIndexOffset:1200});
+      var popup=document.createElement('div');
+      var title=document.createElement('strong');
+      title.textContent=p.name;
+      var body=document.createElement('p');
+      body.textContent=p.year+'년 입장객 합계: '+fmt(p.visitors)+'명';
+      var hint=document.createElement('small');
+      hint.textContent=loc.note+' · 수치는 춘천도시공사 시설별 월별 입장객이며, 춘천 전체 관광객 수나 실시간 방문 인원이 아닙니다.';
+      popup.append(title,body,hint);
+      pin.bindPopup(popup).addTo(tourLayer);
+      tourismPins.set(p.name,pin);
+
+      var b=document.createElement('button');
+      b.type='button';
+      b.className='tourist-go';
+      var main=document.createElement('span');
+      main.className='tour-place';
+      main.textContent=p.name;
+      var meta=document.createElement('small');
+      meta.className='tour-period';
+      meta.textContent=p.year+'년 공개 자료 · 지도 위치로 이동';
+      main.append(meta);
+      var amount=document.createElement('span');
+      amount.className='tour-num';
+      amount.textContent=fmt(p.visitors)+'명';
+      b.append(main,amount);
+      b.addEventListener('click',()=>focusTour(p.name));
+      cardlist.append(b);
+    }
   }
+  showButton.addEventListener('click',()=>{
+    var locs=[...tourismPins.values()];
+    if(!locs.length){
+      el('facilityActivityToggle').checked=true;
+      drawTour();
+      locs=[...tourismPins.values()];
+    }
+    if(locs.length===1)state.map.setView(locs[0].getLatLng(),13,{animate:true});
+    else if(locs.length>1)state.map.fitBounds(L.featureGroup(locs).getBounds().pad(0.18),{animate:true,maxZoom:12});
+  });
   var originalRender=render;
   render=function(){originalRender();drawBus();drawMarket();drawTour();};
   ['bus','sales','facility'].forEach(name=>el(name+'ActivityToggle').addEventListener('change',render));
