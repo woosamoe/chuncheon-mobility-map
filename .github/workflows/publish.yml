@@ -61,6 +61,7 @@ jobs:
           node --check site/public/app.js
           node --check site/public/performance.js
           node --check site/public/activity.js
+          node tests/tourism_map_smoke.cjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
