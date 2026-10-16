@@ -27,7 +27,16 @@ jobs:
           cd site
           python3 scripts/prepare_data.py
           python3 scripts/collect_speed.py || true
+      - name: Cache weekly published activity statistics
+        id: activityweek
+        run: echo "week=$(date -u +%G%V)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: activitycache
+        with:
+          path: site/public/data/activity.json
+          key: verified-chuncheon-activity-${{ steps.activityweek.outputs.week }}
       - name: Collect verified public mobility activity data
+        if: steps.activitycache.outputs.cache-hit != 'true'
         run: |
           cd site
           python3 ../scripts/collect_activity.py
