@@ -30,17 +30,31 @@ jobs:
       - name: Cache weekly published activity statistics
         id: activityweek
         run: echo "week=$(date -u +%G%V)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - name: Restore last verified activity snapshot
+        uses: actions/cache/restore@v4
         id: activitycache
         with:
           path: site/public/data/activity.json
-          key: verified-chuncheon-activity-geocoded-v3-${{ steps.activityweek.outputs.week }}
-      - name: Collect verified public mobility activity data
-        if: steps.activitycache.outputs.cache-hit != 'true'
+          key: verified-chuncheon-activity-geocoded-v4-${{ steps.activityweek.outputs.week }}
+          restore-keys: |
+            verified-chuncheon-activity-geocoded-v4-
+            verified-chuncheon-activity-geocoded-v2-
+      - name: Rebuild verified activity data only if missing or out of date
         run: |
           cd site
-          python3 ../scripts/collect_activity.py
-          python3 ../scripts/geocode_activity.py
+          if [ "${{ steps.activitycache.outputs.cache-hit }}" != "true" ]; then
+            if [ ! -s public/data/activity.json ]; then
+              python3 ../scripts/collect_activity.py
+            fi
+            python3 ../scripts/geocode_activity.py
+          fi
+          python3 ../scripts/check_activity.py
+      - name: Save verified weekly activity snapshot
+        if: steps.activitycache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: site/public/data/activity.json
+          key: verified-chuncheon-activity-geocoded-v4-${{ steps.activityweek.outputs.week }}
       - name: Bundle local map resources and improve rendering
         run: |
           bash patches/apply.sh
