@@ -10,6 +10,8 @@ class FakeNode {
     this.handlers={};this.checked=true;this.textContent='';this.className='';
     this._value='';this.innerHTML='';
   }
+  set id(v){this._id=String(v);elements.set(this._id,this);}
+  get id(){return this._id||'';}
   set value(v){this._value=String(v);}
   get value(){return this._value||((this.children.find(n=>n.tag==='option')||{}).value||'');}
   append(...nodes){this.children.push(...nodes);}
