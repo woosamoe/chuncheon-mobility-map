@@ -51,28 +51,25 @@ def valid(p):
 activity=json.loads(DATA.read_text(encoding="utf-8"))
 features=requests.get(GEO,timeout=110,headers={"User-Agent":"chuncheon-mobility-map/1.0 (public static project; source credited)"}).json()["features"]
 print("ADMIN-GEO features",len(features),"sample",features[0].get("properties",{}))
-reference=[]
-for feat in features:
-    p=feat.get("properties",{})
-    name=normalize(p.get("adm_nm") or p.get("ADM_NM"))
-    if name in ("석사동","퇴계동"):
-        c=center(feat.get("geometry",{}))
-        if valid(c):reference.append((name,str(p.get("adm_cd","")),c))
-print("ADMIN-GEO Chuncheon references",reference[:10])
-# Infer locality from verifiable local administrative neighborhoods, instead of
-# blindly accepting same-named 읍·면·동 elsewhere in the country.
-prefixes={p[1][:5] for p in reference if p[1] and len(p[1])>=5}
-print("ADMIN-GEO district prefixes",sorted(prefixes))
+# Full administrative names use `강원특별자치도 춘천시 석사동`.
+# Filter using the source's explicit local-government name instead of relying on
+# code prefixes or comparing the full name to the short 읍면동 label.
 byname={}
+chuncheon_count=0
 for feat in features:
     p=feat.get("properties",{})
-    adm=str(p.get("adm_cd",""))
-    if prefixes and adm[:5] not in prefixes:continue
-    name=normalize(p.get("adm_nm") or p.get("ADM_NM"))
-    if not name:continue
+    if str(p.get("sggnm","")).strip()!="춘천시":
+        continue
+    chuncheon_count+=1
+    name=normalize(str(p.get("adm_nm") or p.get("ADM_NM") or "").split()[-1])
+    if not name:
+        continue
     c=center(feat.get("geometry",{}))
-    if not valid(c):continue
+    if not valid(c):
+        continue
     byname.setdefault(name,[]).append(c)
+print("ADMIN-GEO Chuncheon features",chuncheon_count,
+      "districts",sorted(byname.keys()))
 matched=missing=0
 for row in activity.get("sales",[]):
     key=normalize(row.get("name"))
