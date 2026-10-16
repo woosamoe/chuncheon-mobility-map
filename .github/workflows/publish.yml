@@ -20,6 +20,8 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Probe official data sources
+        run: python3 scripts/probe_open_data.py
       - name: Extract website source
         run: |
           test -f chuncheon_webapp_deploy_source.zip || { echo 'Upload chuncheon_webapp_deploy_source.zip to the repository root'; exit 1; }
