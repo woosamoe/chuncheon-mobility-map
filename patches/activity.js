@@ -108,7 +108,6 @@
   };
   var tourismPane=state.map.getPane('tourismMarkers')||state.map.createPane('tourismMarkers');
   tourismPane.style.zIndex='680';
-  tourismPane.style.pointerEvents='auto';
   var tourismPins=new Map();
   var cardlist=el('facilityActivityList');
   cardlist.classList.add('tourism-list');
@@ -186,7 +185,7 @@
       showButton.textContent='관광지 마커 켜고 지도에서 보기 ↗';
       return;
     }
-    for(var p of visibleSites){
+    for(let p of visibleSites){
       var loc=sites[p.name];
       var text=p.name+' '+p.year+'년 '+fmt(p.visitors)+'명';
       // Tourist pins are separately labeled, in the top overlay pane, so traffic
