@@ -27,6 +27,11 @@ jobs:
           cd site
           python3 scripts/prepare_data.py
           python3 scripts/collect_speed.py || true
+      - name: Bundle local map resources and improve rendering
+        run: |
+          bash patches/apply.sh
+          node --check site/public/app.js
+          node --check site/public/performance.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
