@@ -34,7 +34,7 @@ jobs:
         id: activitycache
         with:
           path: site/public/data/activity.json
-          key: verified-chuncheon-activity-geocoded-v2-${{ steps.activityweek.outputs.week }}
+          key: verified-chuncheon-activity-geocoded-v3-${{ steps.activityweek.outputs.week }}
       - name: Collect verified public mobility activity data
         if: steps.activitycache.outputs.cache-hit != 'true'
         run: |
