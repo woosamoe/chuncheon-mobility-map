@@ -34,12 +34,13 @@ jobs:
         id: activitycache
         with:
           path: site/public/data/activity.json
-          key: verified-chuncheon-activity-${{ steps.activityweek.outputs.week }}
+          key: verified-chuncheon-activity-geocoded-v2-${{ steps.activityweek.outputs.week }}
       - name: Collect verified public mobility activity data
         if: steps.activitycache.outputs.cache-hit != 'true'
         run: |
           cd site
           python3 ../scripts/collect_activity.py
+          python3 ../scripts/geocode_activity.py
       - name: Bundle local map resources and improve rendering
         run: |
           bash patches/apply.sh
