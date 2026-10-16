@@ -56,7 +56,7 @@ const L={
   divIcon:opts=>opts,
   marker,
   circleMarker:marker,
-  featureGroup:arr=>({getBounds(){return arr.map(x=>x.getLatLng());}})
+  featureGroup:arr=>({getBounds(){return {pad(){return arr.map(x=>x.getLatLng());}};}})
 };
 const entries=[
   {name:'소양강스카이워크',year:2021,month:1,visitors:120},
