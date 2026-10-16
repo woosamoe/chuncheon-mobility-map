@@ -1,0 +1,36 @@
+name: Publish Chuncheon Mobility Map
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '3,18,33,48 * * * *'
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract website source
+        run: |
+          test -f chuncheon_webapp_deploy_source.zip || { echo 'Upload chuncheon_webapp_deploy_source.zip to the repository root'; exit 1; }
+          unzip -oq chuncheon_webapp_deploy_source.zip -d site
+          cd site
+          python3 scripts/prepare_data.py
+          python3 scripts/collect_speed.py || true
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site/public
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4
