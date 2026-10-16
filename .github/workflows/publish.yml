@@ -20,8 +20,6 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect downloadable source files
-        run: python3 scripts/probe_downloads.py
       - name: Extract website source
         run: |
           test -f chuncheon_webapp_deploy_source.zip || { echo 'Upload chuncheon_webapp_deploy_source.zip to the repository root'; exit 1; }
@@ -29,11 +27,16 @@ jobs:
           cd site
           python3 scripts/prepare_data.py
           python3 scripts/collect_speed.py || true
+      - name: Collect verified public mobility activity data
+        run: |
+          cd site
+          python3 ../scripts/collect_activity.py
       - name: Bundle local map resources and improve rendering
         run: |
           bash patches/apply.sh
           node --check site/public/app.js
           node --check site/public/performance.js
+          node --check site/public/activity.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
