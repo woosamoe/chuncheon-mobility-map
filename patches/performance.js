@@ -79,21 +79,23 @@
   if (document.fonts?.ready) document.fonts.ready.then(() => map.invalidateSize({pan: false}));
   requestAnimationFrame(() => map.invalidateSize({pan: false}));
 
-  // Use a globally cached base map with automatic OpenStreetMap fallback.
-  const primary = L.tileLayer('https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>',
-    maxZoom: 18, keepBuffer: 2, updateWhenIdle: true
+  // CARTO raster maps now require their own API key, and may show
+  // a watermark rather than an HTTP error. Keep the key-free OSM base layer
+  // that app.js already added instead of replacing it with CARTO.
+  let osmBase = null;
+  map.eachLayer(layer => {
+    if (!(layer instanceof L.TileLayer)) return;
+    const source = String(layer._url || '');
+    if (source.includes('cartocdn.com')) {
+      map.removeLayer(layer);
+    } else if (source.includes('tile.openstreetmap.org')) {
+      osmBase = layer;
+    }
   });
-  map.eachLayer(layer => { if (layer instanceof L.TileLayer) map.removeLayer(layer); });
-  let fallback = false, tileErrors = 0;
-  primary.on('tileerror', () => {
-    if (fallback || ++tileErrors < 4) return;
-    fallback = true;
-    map.removeLayer(primary);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
-      keepBuffer: 2, updateWhenIdle: true
+  if (!osmBase) {
+    osmBase = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
+      maxZoom: 18, keepBuffer: 2, updateWhenIdle: true
     }).addTo(map);
-  });
-  primary.addTo(map);
+  }
 })();
