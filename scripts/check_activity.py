@@ -10,7 +10,7 @@ bus=data.get("bus") or []
 market=data.get("sales") or []
 facility=data.get("facility") or []
 geocoded=sum(1 for r in market if r.get("lat") is not None and r.get("lon") is not None)
-tour_sites={"소양강스카이워크","구곡폭포"}
+tour_sites={"소양강스카이워크","구곡폭포","삼악산","청평사"}
 tour_years={r["name"]:sorted({x["year"] for x in facility if x["name"]==r["name"]})
             for r in facility if r.get("name") in tour_sites}
 print("VALIDATE activity:",len(bus),"bus locations,",len(market),"markets,",geocoded,
