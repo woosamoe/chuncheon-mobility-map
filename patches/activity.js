@@ -2,7 +2,7 @@
 (function () {
   if (!window.L || !state.map) return;
   var a={bus:[],sales:[],facility:[],metadata:{}};
-  var busLayer=L.layerGroup().addTo(state.map),tourLayer=L.layerGroup().addTo(state.map);
+  var busLayer=L.layerGroup().addTo(state.map),marketLayer=L.layerGroup().addTo(state.map),tourLayer=L.layerGroup().addTo(state.map);
   var fmt=n=>Number(n).toLocaleString('ko-KR'),el=id=>document.getElementById(id);
   var panel=document.createElement('section'); panel.className='section';
   panel.innerHTML=[
@@ -73,35 +73,72 @@
     });
   }
   function drawMarket(){
+    marketLayer.clearLayers();
     var meta=a.metadata.sales||{};
+    var matched=a.sales.filter(p=>Number.isFinite(+p.lat)&&Number.isFinite(+p.lon));
     el('salesActivityStatus').textContent=a.sales.length?
-      a.sales.length+'개 읍면동 매출 기록 · 방문 인원 데이터 아님 · 좌표 없음':
-      '공개 상권 원자료 수집 실패'+(meta.error?' · '+meta.error:'');
+      '행정동 중심 위치 '+matched.length+'곳 / 전체 '+a.sales.length+
+      '곳 · 과거 업종별 매출 기록(방문자 수 아님)':
+      '상권 원자료 없음'+(meta.error?' · '+meta.error:'');
     if(!el('salesActivityToggle').checked){el('salesActivityList').replaceChildren();return;}
-    var items=a.sales.slice().sort((x,y)=>y.sectorCount-x.sectorCount).map(x=>[x.name,x.sectorCount]);
-    rows('salesActivityList',items,'개 업종');
+    rows('salesActivityList',a.sales.slice().sort((x,y)=>y.sectorCount-x.sectorCount)
+       .map(p=>[p.name,p.sectorCount]),'개 업종');
+    matched.forEach(p=>{
+      var size=6+Math.min(6,Math.sqrt(Math.max(0,p.sectorCount||0)));
+      L.circleMarker([+p.lat,+p.lon],{radius:size,weight:2,
+        color:'#fff',fillColor:'#b47b45',fillOpacity:.83})
+        .bindTooltip(p.name+' · '+p.sectorCount+'개 업종')
+        .on('click',()=>details('상권 활동 참고자료',p.name,p.sectorCount+'개 업종',
+          '과거 상권 매출원자료에 기록된 업종 종류: '+fmt(p.sectorCount)+'개'+
+          '\n원자료 행 수: '+fmt(p.records)+'건'+
+          '\n마커 위치: 행정동 경계의 대략적 중심(2026년 공간자료 기준)'+
+          '\n해당 위치에 인파가 집중된다는 의미가 아니며 방문인원 수치도 아닙니다.'))
+        .addTo(marketLayer);
+    });
   }
   // These are independently verified tourist-site locations, not facility footprints.
   var sites={'소양강스카이워크':[37.89327743,127.7236633],'구곡폭포':[37.7939338,127.6092987]};
   function drawTour(){
     tourLayer.clearLayers();
-    var year=Number(el('facilityActivityYear').value);
+    var selection=el('facilityActivityYear').value;
+    var isLatest=selection==='latest';
+    var rowsForPeriod=isLatest?a.facility:a.facility.filter(p=>String(p.year)===selection);
     var grouped=new Map();
-    a.facility.filter(p=>+p.year===year).forEach(p=>grouped.set(p.name,(grouped.get(p.name)||0)+Number(p.visitors||0)));
-    var sorted=[...grouped].sort((x,y)=>y[1]-x[1]);
-    el('facilityActivityStatus').textContent=sorted.length?
-      year+'년 '+sorted.length+'개 시설 입장객 · 체육·복지시설 포함 · 도시 전체 관광객 아님':
-      '선택한 연도에 시설 입장객 자료 없음'+(a.metadata.facility?.error?' · '+a.metadata.facility.error:'');
+    rowsForPeriod.forEach(p=>{
+      var key=isLatest?p.name+'|'+p.year:p.name;
+      grouped.set(key,(grouped.get(key)||0)+Number(p.visitors||0));
+    });
+    var shown=[];
+    if(isLatest){
+      var latestByName=new Map();
+      a.facility.forEach(p=>{
+        var old=latestByName.get(p.name);
+        if(!old||p.year>old.year)latestByName.set(p.name,{name:p.name,year:p.year});
+      });
+      latestByName.forEach(row=>shown.push({
+        name:row.name,year:row.year,people:grouped.get(row.name+'|'+row.year)||0
+      }));
+    }else{
+      grouped.forEach((people,name)=>shown.push({name,year:Number(selection),people}));
+    }
+    shown.sort((x,y)=>y.people-x.people);
+    var landmarkCount=Object.keys(sites).filter(name=>shown.some(p=>p.name===name)).length;
+    el('facilityActivityStatus').textContent=shown.length?
+      (isLatest?'시설별 최근 조사연도':selection+'년')+
+      ' · 시설 '+shown.length+'곳, 관광지 위치확인 '+landmarkCount+'곳'+
+      ' · 일반시설 포함 · 춘천 전체 관광객 수 아님':
+      '선택 기간의 시설입장 자료 없음'+(a.metadata.facility?.error?' · '+a.metadata.facility.error:'');
     if(!el('facilityActivityToggle').checked){el('facilityActivityList').replaceChildren();return;}
-    rows('facilityActivityList',sorted,'명');
-    Object.entries(sites).forEach(([name,latlon])=>{
-      if(!grouped.has(name))return;
-      var people=grouped.get(name);
-      L.circleMarker(latlon,{radius:Math.min(19,Math.max(7,6+Math.sqrt(people)/50)),
-        weight:2,color:'#fff',fillColor:'#8864bb',fillOpacity:.85})
-        .bindTooltip(name+' '+year+'년 '+fmt(people)+'명')
-        .on('click',()=>details('관광시설 입장객',name,fmt(people)+' 명',
-           year+'년 월별 입장객 합계이며 해당 관광시설 이용자만 나타냅니다.\n출처: 춘천도시공사 시설 입장객 정보.'))
+    rows('facilityActivityList',shown.map(p=>[p.name+' ('+p.year+')',p.people]),'명');
+    shown.filter(p=>Object.prototype.hasOwnProperty.call(sites,p.name)).forEach(p=>{
+      L.circleMarker(sites[p.name],{radius:Math.min(19,Math.max(7,6+Math.sqrt(Math.max(0,p.people))/50)),
+        weight:2,color:'#fff',fillColor:'#8864bb',fillOpacity:.9})
+        .bindTooltip(p.name+' · '+p.year+'년 '+fmt(p.people)+'명')
+        .on('click',()=>details('관광시설 입장객',p.name,fmt(p.people)+' 명',
+          p.year+'년 해당 시설의 월별 공개 입장객 합계.'+
+          '\n최근 조사연도는 관광시설마다 다를 수 있습니다.'+
+          '\n춘천 전체 관광객 수를 나타내지 않습니다.'+
+          '\n출처: 춘천도시공사 시설 입장객 정보.'))
         .addTo(tourLayer);
     });
   }
@@ -113,6 +150,7 @@
     .then(json=>{
       ['bus','sales','facility'].forEach(name=>a[name]=Array.isArray(json[name])?json[name]:[]);
       a.metadata=json.metadata||{};
+      var recent=document.createElement('option'); recent.value='latest'; recent.textContent='시설별 최근 기록'; el('facilityActivityYear').append(recent);
       (a.metadata.facility?.years||[]).slice().sort((x,y)=>y-x).forEach(y=>{
         var option=document.createElement('option');option.value=y;option.textContent=y+'년';el('facilityActivityYear').append(option);
       });
