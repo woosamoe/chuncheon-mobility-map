@@ -25,6 +25,17 @@ assert.equal(lines.metadata.snappedPathCount, 39, 'every corridor path should be
 assert.equal(lines.metadata.fallbackPathCount, 0, 'road-network data should not contain unsnapped fallback paths');
 const index = fs.readFileSync('site/public/index.html', 'utf8');
 assert(index.includes('./banner-routes.js'), 'route UI script should be loaded');
+assert(!index.includes('실측 보행량'), 'unavailable pedestrian layer should not be shown');
+assert(!index.includes('data-mode="period"'), 'period view should not be shown');
+assert(!index.includes('data-mode="annual"'), 'annual view should not be shown');
+assert(index.includes('도로교통량조사 ↗') && index.includes('KOSIS ↗') &&
+  index.includes('ITS ↗') && index.includes('View-T ↗'),
+  'core data source links should remain visible');
+const activityUi = fs.readFileSync('site/public/activity.js', 'utf8');
+assert(activityUi.includes('버스 승하차 원자료 ↗') &&
+  activityUi.includes('상권 원자료 ↗') &&
+  activityUi.includes('시설 입장객 원자료 ↗'),
+  'activity data source links should remain visible');
 const routeUi = fs.readFileSync('site/public/banner-routes.js', 'utf8');
 assert(routeUi.includes('L.polyline'), 'streetlight routes should render as Leaflet vectors');
 assert(routeUi.includes("./data/banner-route-lines.json"), 'road-aligned vector data should be loaded');

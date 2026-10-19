@@ -19,16 +19,7 @@
     '<div class="activity-list" id="facilityActivityList"></div>',
     '<div class="activity-links"><a href="https://www.data.go.kr/data/15138095/fileData.do" target="_blank" rel="noopener noreferrer">버스 승하차 원자료 ↗</a><a href="https://www.data.go.kr/data/15153903/fileData.do" target="_blank" rel="noopener noreferrer">상권 원자료 ↗</a><a href="https://www.data.go.kr/data/15094385/fileData.do" target="_blank" rel="noopener noreferrer">시설 입장객 원자료 ↗</a></div>'
   ].join('');
-  var priorPed=document.getElementById('pedToggle');
-  if(priorPed){
-    var priorRow=priorPed.closest('label');
-    if(priorRow){
-      var heading=priorRow.querySelector('strong'),hint=priorRow.querySelector('small');
-      if(heading)heading.textContent='실측 보행량 (자료 미확보)';
-      if(hint)hint.textContent='보행량 계측 수치는 아직 연결되지 않았습니다';
-    }
-  }
-  var previous=document.querySelectorAll('.sidebar .section')[1];
+  var previous=document.getElementById('speedToggle')?.closest('.section');
   if (previous) previous.insertAdjacentElement('afterend',panel);
   else document.querySelector('.side-scroll').append(panel);
   var style=document.createElement('style');
