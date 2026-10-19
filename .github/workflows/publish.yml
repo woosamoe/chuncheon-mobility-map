@@ -22,8 +22,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Extract website source
         run: |
-          test -f chuncheon_webapp_deploy_source_v3.zip || { echo 'Upload chuncheon_webapp_deploy_source_v3.zip to the repository root'; exit 1; }
-          unzip -oq chuncheon_webapp_deploy_source_v3.zip -d site
+          test -f chuncheon_webapp_deploy_source_v4.zip || { echo 'Upload chuncheon_webapp_deploy_source_v4.zip to the repository root'; exit 1; }
+          unzip -oq chuncheon_webapp_deploy_source_v4.zip -d site
           cd site
           python3 scripts/prepare_data.py
           python3 scripts/collect_speed.py || true

@@ -21,4 +21,8 @@ assert(fs.existsSync('site/public/assets/banner-routes-reference.webp'),
   'route reference image should be packaged');
 const index = fs.readFileSync('site/public/index.html', 'utf8');
 assert(index.includes('./banner-routes.js'), 'route UI script should be loaded');
+const routeUi = fs.readFileSync('site/public/banner-routes.js', 'utf8');
+assert(routeUi.includes('L.polyline'), 'streetlight routes should render as Leaflet vectors');
+assert(routeUi.includes('벡터 노선 표시'), 'vector route visibility control should be present');
+assert(!routeUi.includes('L.imageOverlay'), 'reference image must not be overlaid on the map');
 console.log('Banner route smoke test passed: 82 IDs, 75 counted routes, 1,303 total capacity.');
