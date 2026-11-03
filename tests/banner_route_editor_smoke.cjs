@@ -39,11 +39,13 @@ function layerGroup(){
   groups.push(group);return group;
 }
 function polyline(points,options){
-  return{points,options,addTo(layer){layer.items.push(this);return this;}};
+  return{points,options,addTo(layer){layer.items.push(this);return this;},
+    setLatLngs(next){this.points=next;return this;}};
 }
 function marker(point,options){
   return{
-    point,options,handlers:{},
+    point,options,handlers:{},draggingEnabled:false,
+    dragging:{enable(){this.owner.draggingEnabled=true;}},
     addTo(layer){layer.items.push(this);return this;},
     on(name,callback){this.handlers[name]=callback;return this;},
     getLatLng(){return{lat:this.point[0],lng:this.point[1]};}
@@ -53,9 +55,12 @@ const mapHandlers={};
 const map={
   on(name,callback){mapHandlers[name]=callback;},
   fitBounds(){this.fitCount=(this.fitCount||0)+1;},
-  getContainer(){return new FakeNode();}
+  getContainer(){return new FakeNode();},
+  dragging:{active:true,enabled(){return this.active;},disable(){this.active=false;},enable(){this.active=true;}}
 };
-const L={layerGroup,polyline,marker,divIcon:options=>options,latLngBounds:points=>points};
+const L={layerGroup,polyline,marker(point,options){
+  const value=marker(point,options);value.dragging.owner=value;return value;
+},divIcon:options=>options,latLngBounds:points=>points,DomEvent:{stopPropagation(){}}};
 const documentHandlers={};
 const document={
   createElement:tag=>new FakeNode(tag),
@@ -93,6 +98,16 @@ vm.runInNewContext(code,context);
   assert.equal(el('bannerEditorGroup').value,'A','first route group should be selected');
   assert.equal(el('bannerEditorPath').children.length,1,'path selector should list group paths');
   assert(map.fitCount>0,'selected route should be focused on the map');
+  const firstHandle=groups[1].items[0];
+  assert.equal(firstHandle.options.draggable,true,'control handles should be draggable');
+  assert.equal(firstHandle.options.zIndexOffset,3000,'control handles should stay above map layers');
+  assert.equal(firstHandle.draggingEnabled,true,'marker dragging should be explicitly enabled');
+  firstHandle.handlers.dragstart();
+  firstHandle.point=[37.881,127.721];
+  firstHandle.handlers.drag();
+  assert.match(el('bannerEditorStatus').textContent,/드래그하는 중/,'route should update during drag');
+  firstHandle.handlers.dragend();
+  assert.equal(map.dragging.active,true,'map dragging should be restored after handle drag');
 
   el('bannerEditorNew').handlers.click();
   mapHandlers.click({latlng:{lat:37.88,lng:127.72}});
