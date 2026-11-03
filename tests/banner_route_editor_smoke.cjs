@@ -6,9 +6,9 @@ const vm=require('node:vm');
 const publicDir=process.env.PUBLIC_DIR||'site/public';
 const code=fs.readFileSync(publicDir+'/banner-route-editor.js','utf8');
 const applyScript=fs.readFileSync('patches/apply.sh','utf8');
-assert(applyScript.includes('banner-route-editor.js?v=editor-20261103-dragfix2'),
+assert(applyScript.includes('banner-route-editor.js?v=editor-20261103-fullpath'),
   'published editor URL should be cache-busted after drag fixes');
-for(const token of ['bannerEditorGroup','bannerEditorPath','bannerEditorSnap',
+for(const token of ['bannerEditorGroup','bannerEditorPath','bannerEditorFitGroup','bannerEditorSnap',
   'router.project-osrm.org','localStorage','banner-route-lines-edited.json']){
   assert(code.includes(token),'banner route editor is missing '+token);
 }
@@ -82,9 +82,10 @@ const localStorage={
   setItem:(key,value)=>storage.set(key,String(value)),
   removeItem:key=>storage.delete(key)
 };
+const longPath=Array.from({length:30},(_,index)=>[37.88+index*0.0002,127.72+index*0.0002]);
 const fixture={
-  metadata:{pathCount:1},
-  corridors:{A:[[[37.88,127.72],[37.885,127.725],[37.89,127.73]]]}
+  metadata:{pathCount:2},
+  corridors:{A:[longPath,[[37.89,127.73],[37.895,127.735],[37.90,127.74]]]}
 };
 function fetch(url){
   if(String(url).includes('router.project-osrm.org')){
@@ -102,10 +103,16 @@ vm.runInNewContext(code,context);
 (async()=>{
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(el('bannerEditorGroup').value,'A','first route group should be selected');
-  assert.equal(el('bannerEditorPath').children.length,1,'path selector should list group paths');
-  assert(map.fitCount>0,'selected route should be focused on the map');
-  const firstHandle=groups[1].items[0];
+  assert.equal(el('bannerEditorPath').children.length,2,'path selector should list every group path');
+  assert(map.fitCount>0,'the whole selected group should be focused on the map');
+  assert(groups.some(group=>group.items.some(item=>item.options?.dashArray==='8 8')),
+    'other paths in the selected group should remain visible as context');
+  const initialFitCount=map.fitCount;
+  el('bannerEditorFitGroup').handlers.click();
+  assert(map.fitCount>initialFitCount,'group overview button should fit every path in the group');
+  const firstHandle=groups.flatMap(group=>group.items).find(item=>item.options?.draggable);
   assert.equal(firstHandle.options.draggable,true,'control handles should be draggable');
+  assert.equal(firstHandle.options.icon.iconSize[0],38,'control handles should have a generous drag target');
   assert.equal(firstHandle.options.zIndexOffset,3000,'control handles should stay above map layers');
   assert.equal(firstHandle.options.pane,'bannerEditorControls','control handles should use their own top pane');
   assert.equal(panes.bannerEditorControls.style.zIndex,'760','control pane should stay above canvas marker layers');
@@ -114,6 +121,12 @@ vm.runInNewContext(code,context);
   firstHandle.point=[37.881,127.721];
   firstHandle.handlers.drag();
   assert.match(el('bannerEditorStatus').textContent,/드래그하는 중/,'route should update during drag');
+  assert.match(el('bannerEditorStatus').textContent,/경로 30개 좌표/,
+    'dragging one sampled control should preserve the full source path');
+  const activeLine=groups.flatMap(group=>group.items).find(item=>item.options?.weight===6);
+  assert.equal(activeLine.points.length,30,'the rendered path should keep all original coordinates while dragging');
+  assert.equal(activeLine.points[0][0],37.881,'the dragged control should update its matching source latitude');
+  assert.equal(activeLine.points[0][1],127.721,'the dragged control should update its matching source longitude');
   firstHandle.handlers.dragend();
   assert.equal(map.dragging.active,true,'map dragging should be restored after handle drag');
 
@@ -126,7 +139,7 @@ vm.runInNewContext(code,context);
   assert.match(el('bannerEditorStatus').textContent,/도로망에 맞춘/,'OSRM result should be applied');
 
   el('bannerEditorApply').handlers.click();
-  assert(storage.has('chuncheon-banner-route-editor-v1'),'applied routes should persist locally');
+  assert(storage.has('chuncheon-banner-route-editor-v2'),'applied routes should persist in the new full-path draft');
   el('bannerEditorDownload').handlers.click();
   assert.equal(downloads,1,'edited JSON should be downloaded');
   console.log('Banner route editor smoke test passed: select, draw, road-snap, save and download.');

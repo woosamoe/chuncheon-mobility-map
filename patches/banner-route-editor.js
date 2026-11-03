@@ -5,12 +5,13 @@
   var map=state.map;
   var DATA_URL='./data/banner-route-lines.json';
   var OSRM_BASE='https://router.project-osrm.org/route/v1/driving/';
-  var STORAGE_KEY='chuncheon-banner-route-editor-v1';
+  var STORAGE_KEY='chuncheon-banner-route-editor-v2';
   var colors={A:'#25853a',B:'#199cc8',C:'#d39a16',D:'#d61abb',E:'#253fc3',
     F:'#8b4a28',G:'#191919',H:'#00bfc4',I:'#337c8f',X:'#f05a18'};
   var sourceData=null;
   var workingCorridors={};
   var controlPoints=[];
+  var controlPointIndices=[];
   var editablePoints=[];
   var drawing=false;
   var dirty=false;
@@ -25,6 +26,7 @@
     var controlPane=map.getPane(controlPaneName)||map.createPane(controlPaneName);
     controlPane.style.zIndex='760';
   }
+  var contextLayer=L.layerGroup().addTo(map);
   var editLayer=L.layerGroup().addTo(map);
   var controlLayer=L.layerGroup().addTo(map);
   var changedLayer=L.layerGroup().addTo(map);
@@ -33,13 +35,14 @@
   panel.className='section banner-editor-section';
   panel.innerHTML=[
     '<div class="section-head"><h2>현수기 노선 편집</h2><span class="banner-editor-badge">내 브라우저</span></div>',
-    '<p class="banner-editor-note">기존 노선을 불러와 조절점을 끌거나 새 점을 찍은 뒤 도로망에 맞출 수 있습니다.</p>',
+    '<p class="banner-editor-note">선택 그룹의 전체 경로를 함께 보면서 주황색 조절점으로 한 경로씩 수정할 수 있습니다.</p>',
     '<div class="banner-editor-selects">',
     '<label><span>그룹</span><select id="bannerEditorGroup"></select></label>',
     '<label><span>경로</span><select id="bannerEditorPath"></select></label>',
     '</div>',
-    '<div class="banner-editor-actions two">',
+    '<div class="banner-editor-actions three">',
     '<button type="button" id="bannerEditorLoad">선택 경로 불러오기</button>',
+    '<button type="button" id="bannerEditorFitGroup">그룹 전체 보기</button>',
     '<button type="button" id="bannerEditorNew">새 경로 그리기</button>',
     '</div>',
     '<div class="banner-editor-actions three">',
@@ -52,7 +55,8 @@
     '<button type="button" id="bannerEditorDownload" class="download">편집 JSON 다운로드</button>',
     '<button type="button" id="bannerEditorReset">임시 편집 초기화</button>',
     '</div>',
-    '<p class="banner-editor-help">새 경로: 지도에서 시작점부터 순서대로 클릭 · 기존 경로: 큰 원형 조절점을 드래그하거나 한 번 누른 뒤 지도에서 새 위치 클릭 · Esc: 그리기 종료</p>',
+    '<p class="banner-editor-help">같은 그룹의 다른 경로는 연한 점선으로 표시됩니다. 주황색 조절점을 드래그하거나 한 번 누른 뒤 지도에서 새 위치를 클릭하세요.</p>',
+    '<p class="banner-editor-help">새 경로: 지도에서 시작점부터 순서대로 클릭 · Esc: 그리기 종료</p>',
     '<p class="banner-editor-help">다운로드한 JSON을 이 작업에 첨부하면 공개 지도 데이터로 반영할 수 있습니다.</p>'
   ].join('');
   var bannerSection=document.getElementById('bannerRouteList')?.closest('.section');
@@ -77,7 +81,7 @@
     '.banner-editor-status{min-height:34px;background:#f4f7f6;border-radius:7px;padding:8px;margin:8px 0 4px;font-size:11px;line-height:1.5;color:#3e625b}',
     '.banner-editor-drawing{box-shadow:0 0 0 3px #f05a1844!important;background:#f05a18!important;color:#fff!important}',
     '.banner-editor-handle{background:transparent;border:0!important;cursor:grab!important;touch-action:none!important}',
-    '.banner-editor-handle:active{cursor:grabbing!important}.banner-editor-handle span{display:block;width:18px;height:18px;margin:3px;border:3px solid #fff;border-radius:50%;background:#f05a18;box-shadow:0 1px 7px #0009;pointer-events:none}',
+    '.banner-editor-handle:active{cursor:grabbing!important}.banner-editor-handle span{display:block;width:22px;height:22px;margin:5px;border:3px solid #fff;border-radius:50%;background:#f05a18;box-shadow:0 1px 8px #0009;pointer-events:none}',
     '.banner-editor-handle.selected span{background:#1f70b7;box-shadow:0 0 0 4px #1f70b744,0 1px 7px #0009}',
     '#map.banner-editor-map-drawing,.banner-editor-map-drawing{cursor:crosshair!important}',
     '@media(max-width:760px){.banner-editor-actions.three{grid-template-columns:1fr}.banner-editor-actions button{padding:10px 6px}}'
@@ -106,13 +110,24 @@
     var dx=(a[1]-b[1])*88000;
     return Math.sqrt(dx*dx+dy*dy);
   }
-  function samplePath(path,limit){
-    if(!Array.isArray(path)||path.length<=limit)return clone(path||[]);
-    var sampled=[path[0]];
+  function sampleIndices(path,limit){
+    if(!Array.isArray(path)||!path.length)return[];
+    if(path.length<=limit)return path.map(function(_,index){return index;});
+    var indices=[0];
     var step=(path.length-1)/(limit-1);
-    for(var i=1;i<limit-1;i++)sampled.push(path[Math.round(i*step)]);
-    sampled.push(path[path.length-1]);
-    return clone(sampled);
+    for(var i=1;i<limit-1;i++)indices.push(Math.round(i*step));
+    indices.push(path.length-1);
+    return indices;
+  }
+  function rebuildControlPoints(){
+    controlPointIndices=sampleIndices(editablePoints,18);
+    controlPoints=controlPointIndices.map(function(index){return clone(editablePoints[index]);});
+  }
+  function moveControlPoint(index,point){
+    if(!controlPoints[index])return;
+    controlPoints[index]=clone(point);
+    var editableIndex=controlPointIndices[index];
+    if(Number.isInteger(editableIndex)&&editablePoints[editableIndex])editablePoints[editableIndex]=clone(point);
   }
   function routeLength(path){
     var total=0;
@@ -124,7 +139,27 @@
     status.textContent=prefix+' · 조절점 '+controlPoints.length+'개 · 경로 '+editablePoints.length+
       '개 좌표 · 약 '+Math.round(length).toLocaleString('ko-KR')+'m';
   }
+  function renderGroupContext(){
+    contextLayer.clearLayers();
+    var group=currentGroup();
+    var selected=currentIndex();
+    (workingCorridors[group]||[]).forEach(function(path,index){
+      if(index===selected||!Array.isArray(path)||path.length<2)return;
+      L.polyline(path,{
+        color:colorFor(group),weight:5,opacity:.36,dashArray:'8 8',
+        lineCap:'round',lineJoin:'round',interactive:false
+      }).addTo(contextLayer);
+    });
+  }
+  function fitCurrentGroup(){
+    var paths=workingCorridors[currentGroup()]||[];
+    var points=[];
+    paths.forEach(function(path){(path||[]).forEach(function(point){points.push(point);});});
+    if(points.length>1)map.fitBounds(L.latLngBounds(points),{padding:[35,35],maxZoom:15});
+    status.textContent=currentGroup()+' 그룹 전체 '+paths.length+'개 경로를 표시했습니다. 경로를 선택해 조절점을 편집하세요.';
+  }
   function renderEditable(){
+    renderGroupContext();
     editLayer.clearLayers();
     controlLayer.clearLayers();
     editableCasing=null;
@@ -135,7 +170,7 @@
       editableCasing=L.polyline(editablePoints,{color:'#fff',weight:10,opacity:.95,lineCap:'round',lineJoin:'round',interactive:false}).addTo(editLayer);
       editableLine=L.polyline(editablePoints,{color:color,weight:6,opacity:1,lineCap:'round',lineJoin:'round',interactive:false}).addTo(editLayer);
     }
-    var icon=L.divIcon({className:'banner-editor-handle',html:'<span></span>',iconSize:[30,30],iconAnchor:[15,15]});
+    var icon=L.divIcon({className:'banner-editor-handle',html:'<span></span>',iconSize:[38,38],iconAnchor:[19,19]});
     controlPoints.forEach(function(point,index){
       var didDrag=false;
       var marker=L.marker(point,{
@@ -155,16 +190,14 @@
       marker.on('drag',function(){
         didDrag=true;
         var moved=marker.getLatLng();
-        controlPoints[index]=[moved.lat,moved.lng];
-        editablePoints=clone(controlPoints);
+        moveControlPoint(index,[moved.lat,moved.lng]);
         if(editableCasing&&typeof editableCasing.setLatLngs==='function')editableCasing.setLatLngs(editablePoints);
         if(editableLine&&typeof editableLine.setLatLngs==='function')editableLine.setLatLngs(editablePoints);
         updateStatus('조절점을 드래그하는 중입니다');
       });
       marker.on('dragend',function(){
         var moved=marker.getLatLng();
-        controlPoints[index]=[moved.lat,moved.lng];
-        editablePoints=clone(controlPoints);
+        moveControlPoint(index,[moved.lat,moved.lng]);
         if(restoreMapDragging&&map.dragging){
           map.dragging.enable();
           restoreMapDragging=false;
@@ -180,8 +213,9 @@
         status.textContent='조절점 '+(index+1)+'을 선택했습니다. 지도에서 옮길 위치를 클릭하세요.';
       });
       marker.on('contextmenu',function(){
-        controlPoints.splice(index,1);
-        editablePoints=clone(controlPoints);
+        var editableIndex=controlPointIndices[index];
+        if(Number.isInteger(editableIndex))editablePoints.splice(editableIndex,1);
+        rebuildControlPoints();
         selectedControlIndex=-1;
         renderEditable();
         updateStatus('조절점을 삭제했습니다');
@@ -198,19 +232,20 @@
     paths.forEach(function(path,index){
       var option=document.createElement('option');
       option.value=String(index);
-      option.textContent=(index+1)+'번 경로 · '+path.length+'점';
+      option.textContent='편집선 '+(index+1)+' / '+paths.length+' · '+path.length+'좌표';
       pathSelect.append(option);
     });
     pathSelect.value='0';
   }
-  function loadSelected(){
+  function loadSelected(showWholeGroup){
     setDrawing(false);
     selectedControlIndex=-1;
     editablePoints=clone(selectedPath());
-    controlPoints=samplePath(editablePoints,18);
+    rebuildControlPoints();
     renderEditable();
-    if(editablePoints.length>1)map.fitBounds(L.latLngBounds(editablePoints),{padding:[30,30],maxZoom:16});
-    updateStatus(currentGroup()+' 그룹 '+(currentIndex()+1)+'번 경로를 불러왔습니다');
+    if(showWholeGroup===true)fitCurrentGroup();
+    else if(editablePoints.length>1)map.fitBounds(L.latLngBounds(editablePoints),{padding:[30,30],maxZoom:16});
+    updateStatus(currentGroup()+' 그룹 전체 '+(workingCorridors[currentGroup()]||[]).length+'개 중 편집선 '+(currentIndex()+1)+'을 불러왔습니다');
   }
   function renderChanged(){
     changedLayer.clearLayers();
@@ -226,7 +261,7 @@
   }
   function saveDraft(){
     try{
-      localStorage.setItem(STORAGE_KEY,JSON.stringify({version:1,corridors:workingCorridors,savedAt:new Date().toISOString()}));
+      localStorage.setItem(STORAGE_KEY,JSON.stringify({version:2,corridors:workingCorridors,savedAt:new Date().toISOString()}));
       return true;
     }catch(error){
       status.textContent='브라우저 임시 저장 실패: '+error.message;
@@ -270,6 +305,7 @@
       var coordinates=result.routes?.[0]?.geometry?.coordinates;
       if(!Array.isArray(coordinates)||coordinates.length<2)throw Error('경로 결과 없음');
       editablePoints=coordinates.map(function(point){return[Number(point[1]),Number(point[0])];});
+      rebuildControlPoints();
       renderEditable();
       updateStatus('도로망에 맞춘 경로를 만들었습니다');
     }).catch(function(error){
@@ -307,23 +343,30 @@
     dirty=false;
     renderChanged();
     fillPathOptions();
-    loadSelected();
+    loadSelected(true);
     status.textContent='브라우저 임시 편집을 지우고 배포된 원본으로 되돌렸습니다.';
   }
 
-  groupSelect.addEventListener('change',function(){fillPathOptions();loadSelected();});
-  pathSelect.addEventListener('change',loadSelected);
-  el('bannerEditorLoad').addEventListener('click',loadSelected);
+  groupSelect.addEventListener('change',function(){fillPathOptions();loadSelected(true);});
+  pathSelect.addEventListener('change',function(){loadSelected(false);});
+  el('bannerEditorLoad').addEventListener('click',function(){loadSelected(false);});
+  el('bannerEditorFitGroup').addEventListener('click',fitCurrentGroup);
   el('bannerEditorNew').addEventListener('click',function(){
     if(drawing){setDrawing(false);return;}
     controlPoints=[];
+    controlPointIndices=[];
     editablePoints=[];
     renderEditable();
     setDrawing(true);
   });
   el('bannerEditorUndo').addEventListener('click',function(){
+    if(!drawing){
+      status.textContent='마지막 점 취소는 새 경로를 그리는 동안 사용할 수 있습니다.';
+      return;
+    }
     if(!controlPoints.length)return;
     controlPoints.pop();
+    controlPointIndices.pop();
     editablePoints=clone(controlPoints);
     renderEditable();
     updateStatus('마지막 조절점을 취소했습니다');
@@ -335,15 +378,15 @@
   map.on('click',function(event){
     if(!drawing&&selectedControlIndex<0)return;
     if(selectedControlIndex>=0&&!drawing){
-      controlPoints[selectedControlIndex]=[event.latlng.lat,event.latlng.lng];
+      moveControlPoint(selectedControlIndex,[event.latlng.lat,event.latlng.lng]);
       selectedControlIndex=-1;
-      editablePoints=clone(controlPoints);
       renderEditable();
       updateStatus('선택한 조절점을 새 위치로 옮겼습니다. 도로에 맞추기를 눌러 보정하세요');
       return;
     }
     controlPoints.push([event.latlng.lat,event.latlng.lng]);
     editablePoints=clone(controlPoints);
+    controlPointIndices=editablePoints.map(function(_,index){return index;});
     renderEditable();
     updateStatus('조절점을 추가했습니다');
   });
@@ -359,7 +402,7 @@
     workingCorridors=clone(data.corridors||{});
     try{
       var draft=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');
-      if(draft&&draft.version===1&&draft.corridors){
+      if(draft&&draft.version===2&&draft.corridors){
         workingCorridors=draft.corridors;
         dirty=true;
       }
@@ -375,7 +418,7 @@
     groupSelect.value=Object.keys(workingCorridors).sort()[0]||'';
     fillPathOptions();
     renderChanged();
-    loadSelected();
+    loadSelected(true);
     if(dirty)status.textContent+=' · 이전 브라우저 임시 편집을 복원했습니다.';
   }).catch(function(error){
     status.textContent='노선 편집 자료를 불러오지 못했습니다: '+error.message;
