@@ -19,6 +19,12 @@
   var editableCasing=null;
   var editableLine=null;
   var restoreMapDragging=false;
+  var controlPaneName='markerPane';
+  if(typeof map.getPane==='function'&&typeof map.createPane==='function'){
+    controlPaneName='bannerEditorControls';
+    var controlPane=map.getPane(controlPaneName)||map.createPane(controlPaneName);
+    controlPane.style.zIndex='760';
+  }
   var editLayer=L.layerGroup().addTo(map);
   var controlLayer=L.layerGroup().addTo(map);
   var changedLayer=L.layerGroup().addTo(map);
@@ -134,7 +140,7 @@
       var didDrag=false;
       var marker=L.marker(point,{
         icon:icon,draggable:true,autoPan:true,riseOnHover:true,
-        zIndexOffset:3000,keyboard:false,title:'조절점 '+(index+1)
+        zIndexOffset:3000,keyboard:false,pane:controlPaneName,title:'조절점 '+(index+1)
       }).addTo(controlLayer);
       if(marker.dragging&&typeof marker.dragging.enable==='function')marker.dragging.enable();
       if(index===selectedControlIndex&&marker._icon)marker._icon.classList.add('selected');

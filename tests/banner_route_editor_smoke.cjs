@@ -6,7 +6,7 @@ const vm=require('node:vm');
 const publicDir=process.env.PUBLIC_DIR||'site/public';
 const code=fs.readFileSync(publicDir+'/banner-route-editor.js','utf8');
 const applyScript=fs.readFileSync('patches/apply.sh','utf8');
-assert(applyScript.includes('banner-route-editor.js?v=editor-20261103-dragfix'),
+assert(applyScript.includes('banner-route-editor.js?v=editor-20261103-dragfix2'),
   'published editor URL should be cache-busted after drag fixes');
 for(const token of ['bannerEditorGroup','bannerEditorPath','bannerEditorSnap',
   'router.project-osrm.org','localStorage','banner-route-lines-edited.json']){
@@ -55,10 +55,13 @@ function marker(point,options){
   };
 }
 const mapHandlers={};
+const panes={};
 const map={
   on(name,callback){mapHandlers[name]=callback;},
   fitBounds(){this.fitCount=(this.fitCount||0)+1;},
   getContainer(){return new FakeNode();},
+  getPane(name){return panes[name]||null;},
+  createPane(name){const pane={style:{}};panes[name]=pane;return pane;},
   dragging:{active:true,enabled(){return this.active;},disable(){this.active=false;},enable(){this.active=true;}}
 };
 const L={layerGroup,polyline,marker(point,options){
@@ -104,6 +107,8 @@ vm.runInNewContext(code,context);
   const firstHandle=groups[1].items[0];
   assert.equal(firstHandle.options.draggable,true,'control handles should be draggable');
   assert.equal(firstHandle.options.zIndexOffset,3000,'control handles should stay above map layers');
+  assert.equal(firstHandle.options.pane,'bannerEditorControls','control handles should use their own top pane');
+  assert.equal(panes.bannerEditorControls.style.zIndex,'760','control pane should stay above canvas marker layers');
   assert.equal(firstHandle.draggingEnabled,true,'marker dragging should be explicitly enabled');
   firstHandle.handlers.dragstart();
   firstHandle.point=[37.881,127.721];
