@@ -5,6 +5,9 @@ const vm=require('node:vm');
 
 const publicDir=process.env.PUBLIC_DIR||'site/public';
 const code=fs.readFileSync(publicDir+'/banner-route-editor.js','utf8');
+const applyScript=fs.readFileSync('patches/apply.sh','utf8');
+assert(applyScript.includes('banner-route-editor.js?v=editor-20261103-dragfix'),
+  'published editor URL should be cache-busted after drag fixes');
 for(const token of ['bannerEditorGroup','bannerEditorPath','bannerEditorSnap',
   'router.project-osrm.org','localStorage','banner-route-lines-edited.json']){
   assert(code.includes(token),'banner route editor is missing '+token);
