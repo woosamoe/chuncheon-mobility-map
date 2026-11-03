@@ -16,6 +16,8 @@ cp patches/performance.js site/public/performance.js
 cp patches/activity.js site/public/activity.js
 cp patches/poster-boards.js site/public/poster-boards.js
 cp patches/poster-boards.json site/public/data/poster-boards.json
+cp patches/roadview.js site/public/roadview.js
+cp patches/banner-route-editor.js site/public/banner-route-editor.js
 python3 - <<'PY'
 from pathlib import Path
 import re
@@ -29,7 +31,7 @@ if n1!=1 or n2!=1: raise RuntimeError('Leaflet replacement failed: '+str((n1,n2)
 s=s.replace('<link rel="preconnect" href="https://unpkg.com">','<link rel="preload" href="./vendor/leaflet.js" as="script">')
 if '<script src="./app.js"></script>' not in s:raise RuntimeError('Unable to insert performance script')
 s=s.replace('<script src="./app.js"></script>', '<script src="./app.js"></script>\n<script src="./performance.js?basemap=osm-20261017"></script>')
-s=s.replace('</body>', '<script src="./activity.js?v=tourism-20261017-2"></script>\n<script src="./poster-boards.js?v=poster-boards-20260217"></script>\n</body>')
+s=s.replace('</body>', '<script src="./activity.js?v=tourism-20261017-2"></script>\n<script src="./poster-boards.js?v=poster-boards-20260217"></script>\n<script src="./banner-route-editor.js?v=editor-20261103"></script>\n<script src="./roadview.js?v=citywide-20261024"></script>\n</body>')
 index.write_text(s,encoding='utf-8')
-print('Map performance, activity, poster-board data and vendor bundle applied')
+print('Map performance, activity, poster-board, route editor, citywide roadview and vendor bundle applied')
 PY
